@@ -1,0 +1,12 @@
+name: astrbot_plugin_rngdle
+desc: 通过 rngdle.com 抽取每日随机数字，并返回结果。
+short_desc: RNGdle 每日抽数
+version: 1.0.0
+author: SR3MP
+display_name: RNGdle 每日随机数
+support_platforms:
+  - aiocqhttp
+  - qq_official
+  - qq_official_webhook
+  - webchat
+astrbot_version: ">=4.24.2"
