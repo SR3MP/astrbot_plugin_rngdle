@@ -16,14 +16,22 @@ RNGdle 自动抽数字工具
 
 说明:
     - 需要在点击 GENERATE 后耐心等待 badge 动画播放完，SHARE 按钮才会出现。
-    - 通过拦截 navigator.clipboard.writeText 捕获分享文本（headless 无法直接读剪贴板）。
+    - 通过拦截 navigator.clipboard.writeText/write 捕获分享文本（headless 无法直接读剪贴板）。
 """
-import sys
+import os
+import tempfile
 import time
 
 
-def roll_rngdle(headless: bool = True, wait_max: int = 90) -> str:
-    """真实抽取一个 RNGdle 数字并返回官方分享文本。"""
+def roll_rngdle(headless: bool = True, wait_max: int = 90, screenshot_dir: str = None) -> str:
+    """真实抽取一个 RNGdle 数字并返回官方分享文本。
+
+    screenshot_dir: 失败/结果截图保存目录，默认系统临时目录下的 rngdle 子目录。
+    """
+    if not screenshot_dir:
+        screenshot_dir = os.path.join(tempfile.gettempdir(), "rngdle")
+    os.makedirs(screenshot_dir, exist_ok=True)
+
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
@@ -34,23 +42,51 @@ def roll_rngdle(headless: bool = True, wait_max: int = 90) -> str:
         )
         page = context.new_page()
 
-        # 拦截 navigator.clipboard.writeText，捕获分享文本
+        # 拦截剪贴板写入，捕获分享文本。
+        # headless 下 navigator.clipboard 可能不存在、writeText 可能被沙箱拒绝，
+        # 因此同时覆盖 writeText/write，并监听 copy/paste 事件做兜底。
         page.add_init_script("""
             window.__copiedShare = null;
             try {
-                const origWrite = navigator.clipboard.writeText.bind(navigator.clipboard);
-                navigator.clipboard.writeText = async function (text) {
+                if (typeof navigator.clipboard === 'undefined') {
+                    navigator.clipboard = {};
+                }
+                var capture = function (text) {
                     window.__copiedShare = text;
-                    return origWrite(text);
                 };
+                if (typeof navigator.clipboard.writeText === 'function') {
+                    navigator.clipboard.writeText = async function (text) {
+                        capture(text);
+                        return Promise.resolve();
+                    };
+                }
+                if (typeof navigator.clipboard.write === 'function') {
+                    navigator.clipboard.write = async function (items) {
+                        try {
+                            for (var i = 0; i < items.length; i++) {
+                                var item = items[i];
+                                for (var j = 0; j < item.types.length; j++) {
+                                    var type = item.types[j];
+                                    var blob = await item.getType(type);
+                                    var text = await blob.text();
+                                    capture(text);
+                                }
+                            }
+                        } catch (e) {}
+                        return Promise.resolve();
+                    };
+                }
             } catch (e) {}
             document.addEventListener('copy', function (e) {
-                try { window.__copiedShare = e.clipboardData.getData('text/plain'); }
-                catch (err) {}
+                try { window.__copiedShare = e.clipboardData.getData('text/plain'); } catch (err) {}
+            });
+            document.addEventListener('paste', function (e) {
+                try { window.__copiedShare = e.clipboardData.getData('text/plain'); } catch (err) {}
             });
         """)
 
-        page.goto("https://www.rngdle.com/", wait_until="networkidle", timeout=60000)
+        # SPA 页面永远达不到 networkidle，用 domcontentloaded 避免白等 60 秒超时
+        page.goto("https://www.rngdle.com/", wait_until="domcontentloaded", timeout=60000)
         page.get_by_role("button", name="GENERATE").click()
         print("[*] 已点击 GENERATE，等待 badge 逐个弹出...", flush=True)
 
@@ -66,7 +102,10 @@ def roll_rngdle(headless: bool = True, wait_max: int = 90) -> str:
             except Exception:
                 pass
         else:
-            page.screenshot(path="/AstrBot/data/temp/rngdle_fail.png", full_page=True)
+            try:
+                page.screenshot(path=os.path.join(screenshot_dir, "rngdle_fail.png"), full_page=True)
+            except Exception:
+                pass
             browser.close()
             return "[错误] 等待超时，未找到 SHARE 按钮（badge 可能未加载完）。"
 
@@ -82,7 +121,10 @@ def roll_rngdle(headless: bool = True, wait_max: int = 90) -> str:
             text = page.inner_text("body")
             captured = f"(剪贴板捕获失败，页面信息如下)\n{text[:1200]}"
 
-        page.screenshot(path="/AstrBot/data/temp/rngdle_result.png", full_page=True)
+        try:
+            page.screenshot(path=os.path.join(screenshot_dir, "rngdle_result.png"), full_page=True)
+        except Exception:
+            pass
         browser.close()
         return captured
 
