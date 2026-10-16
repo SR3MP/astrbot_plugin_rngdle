@@ -1,7 +1,7 @@
 name: astrbot_plugin_rngdle
 desc: 通过 rngdle.com 抽取每日随机数字，并返回结果。
 short_desc: RNGdle 每日抽数
-version: 1.0.2
+version: 1.0.3
 author: SR3MP
 repo: https://github.com/SR3MP/astrbot_plugin_rngdle
 display_name: RNGdle 每日随机数

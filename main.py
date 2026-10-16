@@ -38,13 +38,13 @@ _rngdle_spec.loader.exec_module(_rngdle_mod)
 roll_rngdle = _rngdle_mod.roll_rngdle
 
 
-@register("astrbot_plugin_rngdle", "mcxxiu", "RNGdle 抽数字", "1.0.2")
+@register("astrbot_plugin_rngdle", "mcxxiu", "RNGdle 抽数字", "1.0.3")
 class RngdlePlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
         self.config = config
         self._lock = threading.Lock()  # 防止浏览器并发冲突
-        self._daily_cache = {}  # {"YYYY-MM-DD": share_text}，同一日期只真抽一次
+        self._daily_cache = {}  # {(uid, "YYYY-MM-DD"): share_text}，每个用户当天各抽一次
 
     @filter.command("rngdle", alias={"抽数字", "rngdle抽数", "RNGDLE"})
     async def on_rngdle(self, event: AstrMessageEvent):
@@ -52,11 +52,14 @@ class RngdlePlugin(Star):
         # 立刻给个提示，说明正在抽取（可能需要30秒左右）
         yield event.plain_result("🎲 正在为你抽取 RNGdle 数字，需要约30秒，请稍候...")
 
-        # 按 UTC 日期分桶缓存：rngdle 每天限抽一次，同一天内多群/多人触发直接复用结果
+        # 按"用户 + UTC 日期"分桶缓存：每个用户当天第一次触发各自抽取一次，
+        # 之后同一用户当天再触发则复用自己的结果，互不影响。
         today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-        cached = self._daily_cache.get(today)
+        uid = event.get_sender_id() or "unknown"
+        cache_key = (uid, today)
+        cached = self._daily_cache.get(cache_key)
         if cached:
-            yield event.plain_result(cached + "\n（今日已抽取，直接返回今日结果）")
+            yield event.plain_result(cached + "\n（你今日已抽取过，直接返回你的结果）")
             return
 
         loop = asyncio.get_running_loop()
@@ -67,7 +70,7 @@ class RngdlePlugin(Star):
             yield event.plain_result(f"❌ 抽取失败: {e}\n请确认 Playwright/Chromium 已安装。")
             return
 
-        self._daily_cache[today] = share_text
+        self._daily_cache[cache_key] = share_text
         yield event.plain_result(share_text)
 
     def _do_roll(self) -> str:
