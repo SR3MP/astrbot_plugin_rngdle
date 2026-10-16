@@ -24,14 +24,21 @@ from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 
-# 插件目录下已放置 rngdle_roll.py，加载时一次性导入
+# 插件目录下已放置 rngdle_roll.py。
+# 用绝对路径强制加载插件目录内的版本，避免 sys.modules 里残留旧版同名模块
+# （旧版没有 screenshot_dir 参数）导致 "unexpected keyword argument" 报错。
 PLUGIN_DIR = Path(__file__).resolve().parent
-if str(PLUGIN_DIR) not in sys.path:
-    sys.path.insert(0, str(PLUGIN_DIR))
-from rngdle_roll import roll_rngdle
+import importlib.util
+
+_rngdle_spec = importlib.util.spec_from_file_location(
+    "rngdle_roll_plugin", str(PLUGIN_DIR / "rngdle_roll.py")
+)
+_rngdle_mod = importlib.util.module_from_spec(_rngdle_spec)
+_rngdle_spec.loader.exec_module(_rngdle_mod)
+roll_rngdle = _rngdle_mod.roll_rngdle
 
 
-@register("astrbot_plugin_rngdle", "mcxxiu", "RNGdle 抽数字", "1.0.1")
+@register("astrbot_plugin_rngdle", "mcxxiu", "RNGdle 抽数字", "1.0.2")
 class RngdlePlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)

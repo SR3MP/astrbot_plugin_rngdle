@@ -21,6 +21,7 @@ RNGdle 自动抽数字工具
 import os
 import tempfile
 import time
+import urllib.parse
 
 
 def roll_rngdle(headless: bool = True, wait_max: int = 90, screenshot_dir: str = None) -> str:
@@ -34,8 +35,20 @@ def roll_rngdle(headless: bool = True, wait_max: int = 90, screenshot_dir: str =
 
     from playwright.sync_api import sync_playwright
 
+    # 从环境变量读取代理配置，Playwright 不会自动读 http_proxy/https_proxy
+    proxy_url = os.environ.get("https_proxy") or os.environ.get("http_proxy")
+    launch_kwargs = {"headless": headless, "args": ["--no-sandbox"]}
+    if proxy_url:
+        parsed = urllib.parse.urlparse(proxy_url)
+        proxy_config = {"server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"}
+        if parsed.username:
+            proxy_config["username"] = urllib.parse.unquote(parsed.username)
+        if parsed.password:
+            proxy_config["password"] = urllib.parse.unquote(parsed.password)
+        launch_kwargs["proxy"] = proxy_config
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless, args=["--no-sandbox"])
+        browser = p.chromium.launch(**launch_kwargs)
         context = browser.new_context(
             viewport={"width": 1280, "height": 1200},
             permissions=["clipboard-read", "clipboard-write"],

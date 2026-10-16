@@ -49,11 +49,22 @@ python3 -m playwright install chromium
 apt-get install -y libnspr4 libnss3 libatk1.0-0 libcups2 libxcomposite1 libxdamage1
 ```
 
+### 代理配置
+
+Playwright 的 Chromium 不会自动读取系统环境变量中的代理设置。如果服务器需要通过代理访问外网，请确保环境变量 `http_proxy` / `https_proxy` 已设置（v1.0.2 起自动读取）：
+
+```bash
+export http_proxy=http://user:pass@host:port
+export https_proxy=http://user:pass@host:port
+```
+
+插件会自动解析代理 URL（含用户名密码），传入 Playwright 启动参数。
+
 > 国内网络建议使用镜像加速：`pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple`
 
 ## 安装插件
 
-将本插件目录（`astrbot_plugin_rngdle`）放入 AstrBot 的 `data/plugins/` 目录，然后重启 AstrBot 即可加载。
+将本插件目录（`astrbot_plugin_rngdle`））放入 AstrBot 的 `data/plugins/` 目录，然后重启 AstrBot 即可加载。
 
 ```bash
 # 重启 AstrBot 容器（示例，按你的实际部署调整）
